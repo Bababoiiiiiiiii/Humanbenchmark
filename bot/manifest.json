@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Human Benchmark Bot",
+  "description": "Uses the chrome.debugger API to solve some Humanbenchmark scripts as effiently as possible.",
+  "version": "1.0",
+  "permissions": [
+    "debugger",
+    "tabs",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "click me"
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  }
+}
