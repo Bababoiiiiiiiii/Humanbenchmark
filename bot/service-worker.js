@@ -1,11 +1,15 @@
 
-let breakpoints = {
+const breakpoints = {
     reactiontime: {
         columnNumber: 61054,
     },
     sequence: {
         columnNumber: 125677,
+    },
+    aim: {
+        columnNumber: 104694
     }
+
 }
 
 
@@ -13,15 +17,15 @@ let breakpoints = {
 // this tabID will be the correct one since the toggle is synced across pages and can only be updated on humanbenchmark pages -> if its turned on, cant be turned on again
 let tabID
 let script_id
+let currentTest = null
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-    console.log(message)
     switch (message.type) {
         case "toggle":
             chrome.storage.sync.get('toggle', function (result) {
-                console.log(result)
                 if (result.toggle) {
                     tabID = message.tab_id
+                    currentTest = message.test
 
                     switch (message.test) {
                         case "reactiontime":
@@ -29,8 +33,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                             break
 
                         case "sequence":
-                            addSequenceBot(tabID)
+                            addSequenceBot()
                             break
+
+                        case "aim":
+                            addAimBot()
+                            break
+
                     }
 
                 } else {
@@ -43,8 +52,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         case "sequence":
                             chrome.debugger.onEvent.removeListener(sequenceEvent)
                             break
+
+                        case "aim":
+                            chrome.debugger.onEvent.removeListener(aimbotEvent)
+                            break
+
                     }
-                    chrome.debugger.detach({ tabId: tabID }); // tabID is only used here
+                    chrome.debugger.detach({ tabId: tabID });
                 }
             });
 
@@ -56,48 +70,88 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 ///////////////////////////
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
+    
+    chrome.storage.sync.get('popupopened', function (result) {
+        if (result.popupopened === true && changeInfo.status === "complete" && !tab.url.includes(currentTest)) {// page didnt get refreshed and popup is open                        could probably add some optimization to other stuff as well, but thats some refactoring i dont want to do
+            chrome.runtime.sendMessage({
+                type: "urlchanged",
+            }, () => {
+                if (chrome.runtime.lastError) {} // no error should be shown as the poup is often closed, thus not available and there is no way to check if its opened
+            });
+        }
+    })
 
-    if (tabId == tabID && changeInfo.audible === undefined && changeInfo.status == "complete") { // audbile exists when tab isnt reloaded but updated
-        let start_function
 
-        chrome.storage.sync.get('toggle', function (result) {
+    setTimeout(() => { // timeout bc sometimes this shit aint working, cant figure out why, it isnt bc dom isnt loaded
+        if (tabId == tabID && changeInfo.audible === undefined && changeInfo.status === "complete" && changeInfo.url === undefined) { // audible exists when tab isnt reloaded but updated
 
-            if (result.toggle) {
+            // update popup.html accordingly
 
-                switch (tab.url) {
 
-                    case "https://humanbenchmark.com/tests/reactiontime":
-                        chrome.debugger.onEvent.removeListener(reactiontimeEvent)
-                        start_function = addReactionTimeBot
+            chrome.storage.sync.get('toggle', function (result) {
 
-                    case "https://humanbenchmark.com/tests/sequence":
-                        chrome.debugger.onEvent.removeListener(sequenceEvent)
-                        start_function = addSequenceBot
+                if (result.toggle) {
 
-                        chrome.debugger.detach({ tabId: tabID })
+                    console.log("url now:", tab.url)
+                    console.log("test before", currentTest)
+                    switch (currentTest) { // remove old shit
+                        case "reactiontime":
+                            chrome.debugger.onEvent.removeListener(reactiontimeEvent)
+                            chrome.debugger.detach({ tabId: tabID })
+                            break
+
+                        case "sequence":
+                            chrome.debugger.onEvent.removeListener(sequenceEvent)
+                            chrome.debugger.detach({ tabId: tabID })
+                            break
+
+                        case "aim":
+                            chrome.debugger.onEvent.removeListener(aimbotEvent)
+                            chrome.debugger.detach({ tabId: tabID })
+                            break
+
+                    }
+
+
+                    switch (tab.url) {
+                        case "https://humanbenchmark.com/tests/reactiontime":
+                            currentTest = "reactiontime"
+                            addReactionTimeBot()
+                            break
+
+                        case "https://humanbenchmark.com/tests/sequence":
+                            currentTest = "sequence"
+                            addSequenceBot()
+                            break
+
+                        case "https://humanbenchmark.com/tests/aim":
+                            currentTest = "aim"
+                            addAimBot()
+                            break
+
+                        default:
+                            currentTest = null
+                    }
 
                 }
 
-                if (changeInfo.url === undefined) { // page got refreshed, now we need to reapply breakpoints, for convinience we're going to restart the whole bot
-                    start_function()
-                }
-
-            }
-        });
-    }
+            })
+        }
+    }, 100)
 });
 
 /////////////////////
 
 
-function set_breakpoint(tabID, script_id, lineNumber, columnNumber, callback) {
-    console.log(tabID, script_id, lineNumber, columnNumber)
+function set_breakpoint(tabID, script_id, lineNumber, columnNumber, condition, callback) {
+
     chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.setBreakpoint', {
         location: {
             scriptId: script_id,
             lineNumber: lineNumber,
-            columnNumber: columnNumber // 61054 = Wait for Green | 61215 = Click
-        }
+            columnNumber: columnNumber
+        },
+        condition: condition
     }, (breakpoint) => {
         if (!chrome.runtime.lastError && breakpoint.breakpointId) {
             console.log('Breakpoint set: ' + breakpoint.breakpointId);
@@ -111,9 +165,9 @@ function set_breakpoint(tabID, script_id, lineNumber, columnNumber, callback) {
                 if (result.tries <= 3) {
                     console.log(`Failed to set breakpoint, trying again by reloading page in 1 second. [${result.tries}/3]`)
                     chrome.storage.sync.set({
-                        tries: result.tries+1,
+                        tries: result.tries + 1,
                     })
-                    setTimeout(() => chrome.tabs.reload(tabID), 1000)
+                    setTimeout(() => chrome.tabs.reload(tabID), 2000)
                 } else {
                     chrome.storage.sync.set({
                         tries: 1,
@@ -122,7 +176,7 @@ function set_breakpoint(tabID, script_id, lineNumber, columnNumber, callback) {
                 }
             });
 
-           
+
         }
     })
 }
@@ -220,7 +274,7 @@ function reactiontimeEvent(debuggeeId, message, params) {
 
 function addReactionTimeBot() {
     attachDebugger(tabID, () => {
-        set_breakpoint(tabID, script_id, 0, breakpoints.reactiontime.columnNumber, () => {
+        set_breakpoint(tabID, script_id, 0, breakpoints.reactiontime.columnNumber, null, () => {
             chrome.debugger.onEvent.addListener(reactiontimeEvent);
         });
     });
@@ -232,6 +286,7 @@ function addReactionTimeBot() {
 function sequenceEvent(debuggeeId, message, params) {
     let length
     let sequence
+
     if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
         chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
             objectId: params.callFrames[0].returnValue.objectId, // return value of function rr (returns sequence for the following)
@@ -289,7 +344,7 @@ function sequenceEvent(debuggeeId, message, params) {
                                                         square_element.style.background = "";
                                                         square_element.style.transform = "";
                                                         square_element.style.transition = "";
-                                                    }, 1+ delay / 20) // if its too short, it can reference the wrong thing lol or whatever idk
+                                                    }, 1 + delay / 20) // if its too short, it can reference the wrong thing lol or whatever idk
                                                 }
 
                                                 i++;
@@ -310,16 +365,6 @@ function sequenceEvent(debuggeeId, message, params) {
                 });
 
             })
-            // modify variables on breakpoint
-            // chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.evaluateOnCallFrame', {
-            //     callFrameId: params.callFrames[0].callFrameId,
-            //     throwOnSideEffect: false,
-            //     silent: true,
-            //     returnByValue: false,
-            //     expression: `variable=xyz`
-
-            // }, function () {}
-
         })
 
     }
@@ -328,8 +373,65 @@ function sequenceEvent(debuggeeId, message, params) {
 
 function addSequenceBot() {
     attachDebugger(tabID, () => {
-        set_breakpoint(tabID, script_id, 0, breakpoints.sequence.columnNumber, () => {
+        set_breakpoint(tabID, script_id, 0, breakpoints.sequence.columnNumber, null, () => {
             chrome.debugger.onEvent.addListener(sequenceEvent)
+        })
+    })
+}
+
+
+//////////////////////
+
+function aimbotEvent(debuggeeId, message, params) {
+    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+
+        chrome.storage.sync.get("delay", function (delay_result) {
+
+            chrome.scripting.executeScript({
+
+                target: { tabId: tabID, allFrames: true },
+                args: [delay_result.delay],
+                func: (delay) => {
+                    if (delay < 5) {
+                        for (let i = 0; i < 30; i++) {
+                            document.querySelector("#root > div > div:nth-child(4) > div.css-12ibl39.e19owgy77 > div > div.desktop-only > div > div > div > div:nth-child(2)").dispatchEvent(new Event("mousedown", {
+                                "bubbles": true
+                            }))
+                        }
+
+
+                    } else {
+                        let i = 0
+                        loop = setInterval(() => {
+
+                            if (i < 30) {
+
+                                document.querySelector("#root > div > div:nth-child(4) > div.css-12ibl39.e19owgy77 > div > div.desktop-only > div > div > div > div:nth-child(2)").dispatchEvent(new Event("mousedown", {
+                                    "bubbles": true
+                                }))
+                                i++;
+
+                            } else {
+                                clearInterval(loop)
+                            }
+
+                        }, delay)
+                    }
+                }
+            })
+
+        });
+
+        chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume')
+    }
+
+}
+
+function addAimBot() {
+
+    attachDebugger(tabID, () => {
+        set_breakpoint(tabID, script_id, 0, breakpoints.aim.columnNumber, 'document.querySelector("#root > div > div:nth-child(4) > div.css-12ibl39.e19owgy77 > div > div.desktop-only > span") === null', () => {
+            chrome.debugger.onEvent.addListener(aimbotEvent)
         })
     })
 }

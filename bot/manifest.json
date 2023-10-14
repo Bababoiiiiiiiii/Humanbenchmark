@@ -8,7 +8,8 @@
     "tabs",
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "webNavigation"
   ],
   "action": {
     "default_popup": "popup.html",
