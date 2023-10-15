@@ -6,3 +6,6 @@
 Currently featuring (don't think I will add others):
 * Reactiontime
 * Sequence
+* Aim Trainer
+* Number Memory
+* Visual Memory
