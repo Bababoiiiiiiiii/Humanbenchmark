@@ -5,7 +5,7 @@
 // USE setBreakpointByUrl
 // properly remove events
 
-const supported_urls = ["https://humanbenchmark.com/tests/reactiontime", "https://humanbenchmark.com/tests/sequence", "https://humanbenchmark.com/tests/aim", "https://humanbenchmark.com/tests/number-memory"]
+const supported_urls = ["https://humanbenchmark.com/tests/reactiontime", "https://humanbenchmark.com/tests/sequence", "https://humanbenchmark.com/tests/aim", "https://humanbenchmark.com/tests/number-memory", "https://humanbenchmark.com/tests/verbal-memory"]
 let tab_id
 
 
@@ -33,12 +33,12 @@ chrome.storage.sync.set({ // leave this in until i find smth to detect if popup 
 function main() {
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
 
-        document.body.innerHTML = `<center><h1>HumanBenchmark</h1></center><center><h2>INVALID URL</h2></center><script src="popup.js"></script>`
+        document.body.innerHTML = `<center><h1>HumanBenchmark</h1></center><center><h2>INVALID URL</h2><center><h4>Dont exit while test is running</h4></center></center><script src="popup.js"></script>`
         if (!supported_urls.includes(tabs[0].url)) {
             console.log("[HumanBenchmark Bot] Invalid URL")
         } else {
 
-            test_name = tabs[0].url.split("tests/", 2)[1].split("/", 1)[0]
+            test_name = tabs[0].url.split("tests/", 2)[1].split("/", 1)[0].replace("-", "")
 
             document.querySelector("body > center:nth-child(2) > h2").textContent = test_name.charAt(0).toUpperCase() + test_name.slice(1)
 

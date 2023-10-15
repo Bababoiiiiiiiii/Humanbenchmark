@@ -11,16 +11,35 @@ const breakpoints = {
     },
     numbermemory: {
         columnNumber: 54995
+    },
+    verbalmemory: {
+        columnNumber: 79111
     }
 
 }
 
 
+const functions = {
+    reactiontime: addReactionTimeBot,
+    sequence: addSequenceBot,
+    aim: addAimBot,
+    numbermemory: addNumberMemoryBot,
+    verbalmemory: addVerbalMemoryBot
+}
+
+const events = {
+    reactiontime: reactiontimeEvent,
+    sequence: sequenceEvent,
+    aim: aimbotEvent,
+    numbermemory: numberMemoryEvent,
+    verbalmemory: verbalMemoryEvent
+}
+
 // using this bc if the toggles user does smth on another humanbenchmark page, the message.tabID  will be for the new one, where the debugger isnt attached and stuff 
 // this tabID will be the correct one since the toggle is synced across pages and can only be updated on humanbenchmark pages -> if its turned on, cant be turned on again
 let tabID
 let script_id
-let currentTest = null
+let current_test = null
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     switch (message.type) {
@@ -28,43 +47,18 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             chrome.storage.sync.get('toggle', function (result) {
                 if (result.toggle) {
                     tabID = message.tab_id
-                    currentTest = message.test
+                    current_test = message.test
 
-                    switch (message.test) {
-                        case "reactiontime":
-                            addReactionTimeBot()
-                            break
-
-                        case "sequence":
-                            addSequenceBot()
-                            break
-
-                        case "aim":
-                            addAimBot()
-                            break
-
-                        case "number-memory":
-                            addNumberMemoryBot()
-                            break
-
+                    if (Object.keys(functions).includes(message.test)) {
+                        functions[message.test]()
                     }
 
                 } else {
 
-                    switch (message.test) {
-                        case "reactiontime":
-                            chrome.debugger.onEvent.removeListener(reactiontimeEvent)
-                            break
-
-                        case "sequence":
-                            chrome.debugger.onEvent.removeListener(sequenceEvent)
-                            break
-
-                        case "aim":
-                            chrome.debugger.onEvent.removeListener(aimbotEvent)
-                            break
-
+                    if (Object.keys(events).includes(message.test)) {
+                        chrome.debugger.onEvent.removeListener(functions[message.test])
                     }
+
                     chrome.debugger.detach({ tabId: tabID });
                 }
             });
@@ -79,7 +73,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
 
     chrome.storage.sync.get('popupopened', function (result) {
-        if (result.popupopened === true && changeInfo.status === "complete" && !tab.url.includes(currentTest)) {// page didnt get refreshed and popup is open                        could probably add some optimization to other stuff as well, but thats some refactoring i dont want to do
+        if (result.popupopened === true && changeInfo.status === "complete" && !tab.url.includes(current_test)) {// page didnt get refreshed and popup is open                        could probably add some optimization to other stuff as well, but thats some refactoring i dont want to do
             chrome.runtime.sendMessage({
                 type: "urlchanged",
             }, () => {
@@ -92,63 +86,29 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
     setTimeout(() => { // timeout bc sometimes this shit aint working, cant figure out why, it isnt bc dom isnt loaded
         if (tabId == tabID && changeInfo.audible === undefined && changeInfo.status === "complete" && changeInfo.url === undefined) { // audible exists when tab isnt reloaded but updated
 
-            // update popup.html accordingly
-
-
             chrome.storage.sync.get('toggle', function (result) {
 
                 if (result.toggle) {
 
-                    console.log("url now:", tab.url)
-                    console.log("test before", currentTest)
-                    switch (currentTest) { // remove old shit
-                        case "reactiontime":
-                            chrome.debugger.onEvent.removeListener(reactiontimeEvent)
-                            chrome.debugger.detach({ tabId: tabID })
-                            break
-
-                        case "sequence":
-                            chrome.debugger.onEvent.removeListener(sequenceEvent)
-                            chrome.debugger.detach({ tabId: tabID })
-                            break
-
-                        case "aim":
-                            chrome.debugger.onEvent.removeListener(aimbotEvent)
-                            chrome.debugger.detach({ tabId: tabID })
-                            break
-
-                        case "number-memory":
-                            chrome.debugger.onEvent.removeListener(numberMemoryEvent)
-                            chrome.debugger.detach({ tabId: tabID })
-                            break
-
+                    if (Object.keys(events).includes(current_test)) {
+                        chrome.debugger.onEvent.removeListener(events[current_test])
+                        chrome.debugger.detach({ tabId: tabID })
                     }
 
-
-                    switch (tab.url) {
-                        case "https://humanbenchmark.com/tests/reactiontime":
-                            currentTest = "reactiontime"
-                            addReactionTimeBot()
-                            break
-
-                        case "https://humanbenchmark.com/tests/sequence":
-                            currentTest = "sequence"
-                            addSequenceBot()
-                            break
-
-                        case "https://humanbenchmark.com/tests/aim":
-                            currentTest = "aim"
-                            addAimBot()
-                            break
-
-                        case "https://humanbenchmark.com/tests/number-memory":
-                            currentTest = "number-memory"
-                            addNumberMemoryBot()
-                            break
-
-                        default:
-                            currentTest = null
+                    
+                    let newtest = tab.url.split("tests/", 2)[1]
+                    if (newtest !== undefined) {
+                        newtest.split("/", 1)[0].replace("-", "") // basically converts url into test
                     }
+
+                    if (Object.keys(functions).includes(newtest)) {
+                        current_test = newtest
+                        functions[newtest]()
+
+                    } else {
+                        current_test = null
+                    }
+
 
                 }
 
@@ -184,7 +144,7 @@ function set_breakpoint(tabID, script_id, lineNumber, columnNumber, condition, c
                     chrome.storage.sync.set({
                         tries: result.tries + 1,
                     })
-                    setTimeout(() => chrome.tabs.reload(tabID), 2000)
+                    setTimeout(() => chrome.tabs.reload(tabID), 1000)
                 } else {
                     chrome.storage.sync.set({
                         tries: 1,
@@ -255,7 +215,7 @@ function reactiontimeEvent(debuggeeId, message, params) {
                     chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume') // RESUME
 
                     waitTime = result.result[0].value.value
-                    console.log(waitTime)
+                    
                     setTimeout(() => {
                         chrome.scripting.executeScript({
                             target: { tabId: tabID, allFrames: true },
@@ -266,7 +226,7 @@ function reactiontimeEvent(debuggeeId, message, params) {
                                 if (click_me == null) {
                                     const l = setInterval(() => {
                                         click_me = document.querySelector("#root > div > div:nth-child(4) > div.view-go.e18o0sx0.css-saet2v.e19owgy77 > div");
-                                        console.log(click_me)
+                                        
                                         if (click_me != null) {
                                             clearInterval(l)
                                             click_me.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
@@ -310,8 +270,6 @@ function sequenceEvent(debuggeeId, message, params) {
         }, (result) => {
             if (chrome.runtime.lastError) { console.error('Failed to get properties for return Value:', chrome.runtime.lastError) }
 
-
-            console.log(result)
             chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
                 objectId: result.result[1].value.objectId, // array sequence
             }, (result) => {
@@ -331,7 +289,7 @@ function sequenceEvent(debuggeeId, message, params) {
                         target: { tabId: tabID, allFrames: true },
                         args: [sequence, delay_result.delay],
                         func: (sequence, delay) => {
-                            console.log(sequence)
+                            
                             setTimeout(() => {
                                 wait_for_squares = setInterval(() => {
 
@@ -480,7 +438,7 @@ function numberMemoryEvent(debuggeeId, message, params) {
 
                 chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume', () => {
                     chrome.storage.sync.get('toggle_autonext', function (result) {
-                        
+
                         chrome.scripting.executeScript({
 
                             target: { tabId: tabID, allFrames: true },
@@ -489,7 +447,7 @@ function numberMemoryEvent(debuggeeId, message, params) {
                                 document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.prompt.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > form > div:nth-child(2) > input[type=text]").value = answer
                                 document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.prompt.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > form > div:nth-child(2) > input[type=text]").dispatchEvent(new InputEvent("input", { "bubbles": true })) // make the button do smth
                                 document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.prompt.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > form > div:nth-child(3) > button").click()
-                                
+
                                 if (toggle_autonext) {
                                     document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.anim-correct.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > div:nth-child(2) > button").click()
                                 }
@@ -510,6 +468,70 @@ function addNumberMemoryBot() {
         // breakpoint would break on input too if not for the condition
         set_breakpoint(tabID, script_id, 0, breakpoints.numbermemory.columnNumber, 'document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.question.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > div.big-number") !== null', () => {
             chrome.debugger.onEvent.addListener(numberMemoryEvent)
+        })
+    })
+}
+
+////////////////////////////////
+
+function verbalMemoryEvent(debuggeeId, message, params) {
+    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+        let current_word
+
+        chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
+            objectId: params.callFrames[0].scopeChain[0].object.objectId, // local scope
+        }, (result) => {
+            if (chrome.runtime.lastError) { console.error('Failed to get properties for local scope:', chrome.runtime.lastError) }
+
+            chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
+                objectId: result.result[3].value.objectId, // array c
+            }, (result) => {
+            
+                current_word = result.result[5].value.value
+
+                chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
+                    objectId: result.result[4].value.objectId, // array words
+                }, (result) => {
+            
+                    let word_already_seen = false
+                    for (let i = 0; i < result.result.length - 51; i++) {
+                        if (current_word == result.result[i].value.value) {
+                            word_already_seen = true
+                            break
+                        }
+                    }
+
+                    chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume')
+
+                    chrome.scripting.executeScript({
+
+                        target: { tabId: tabID, allFrames: true },
+                        args: [word_already_seen],
+                        func: (word_already_seen) => {
+                            if (word_already_seen) {
+                                document.querySelector("#root > div > div:nth-child(4) > div.verbal-memory-test.prompt.e1uk74hg0.css-1o221zp.e19owgy77 > div > div > div > div:nth-child(3) > button:nth-child(1)").click()
+                            } else {
+                                document.querySelector("#root > div > div:nth-child(4) > div.verbal-memory-test.prompt.e1uk74hg0.css-1o221zp.e19owgy77 > div > div > div > div:nth-child(3) > button:nth-child(3)").click()
+                            }
+                        }
+                    })
+
+
+
+                })
+
+            })
+
+        })
+
+    }
+
+}
+
+function addVerbalMemoryBot() {
+    attachDebugger(tabID, () => {
+        set_breakpoint(tabID, script_id, 0, breakpoints.verbalmemory.columnNumber, null, () => {
+            chrome.debugger.onEvent.addListener(verbalMemoryEvent)
         })
     })
 }
