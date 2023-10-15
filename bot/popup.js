@@ -5,14 +5,13 @@
 // USE setBreakpointByUrl
 // properly remove events
 
-const supported_urls = ["https://humanbenchmark.com/tests/reactiontime", "https://humanbenchmark.com/tests/sequence", "https://humanbenchmark.com/tests/aim"]
+const supported_urls = ["https://humanbenchmark.com/tests/reactiontime", "https://humanbenchmark.com/tests/sequence", "https://humanbenchmark.com/tests/aim", "https://humanbenchmark.com/tests/number-memory"]
 let tab_id
 
 
 document.addEventListener("DOMContentLoaded", () => main())
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-    console.log(message)
     if (message.type == "urlchanged") {
         main()
     }
@@ -26,16 +25,15 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 //     })
 // })
 
-chrome.storage.sync.set({
+chrome.storage.sync.set({ // leave this in until i find smth to detect if popup is closed
     popupopened: true,
 })
 
 
 function main() {
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-        // const tab_id = tabs[0].id
 
-        document.body.innerHTML=`<center><h1>HumanBenchmark</h1></center><center><h2>INVALID URL</h2></center><script src="popup.js"></script>`
+        document.body.innerHTML = `<center><h1>HumanBenchmark</h1></center><center><h2>INVALID URL</h2></center><script src="popup.js"></script>`
         if (!supported_urls.includes(tabs[0].url)) {
             console.log("[HumanBenchmark Bot] Invalid URL")
         } else {
@@ -58,21 +56,55 @@ function main() {
             document.body.appendChild(toggle_label);
             document.body.appendChild(toggle);
 
-            if (test_name == "sequence" || "aim") {
-                
+            if (test_name == "sequence" || test_name == "aim") {
+
                 let delay_input = document.createElement("div")
-                delay_input.innerHTML = '<div><label for="delay">Delay (ms) :  </label><input type="number" id="delay" name="delay" min="1" max="60000" value="50"></div>'
-                
+                delay_input.innerHTML = '<div><label for="delay">Delay (ms)   </label><input type="number" id="delay" name="delay" min="1" max="60000" value="50"></div>'
+
                 document.body.appendChild(delay_input)
-                chrome.storage.sync.set({
-                    delay: 50,
-                })
                 
+                chrome.storage.sync.get('delay', function (result) {
+                    delay_input.value = result.delay || 50;
+                    chrome.storage.sync.set({
+                        delay: result.delay || 50,
+                    })
+                });
+
+
                 delay_input.addEventListener("change", function () {
                     chrome.storage.sync.set({
                         delay: Number(document.getElementById("delay").value),
                     })
                 });
+
+            } else if (test_name == "number-memory") {
+                let container = document.createElement("div")
+
+                let toggle_autonext = document.createElement("input");
+                toggle_autonext.setAttribute("type", "checkbox");
+                toggle_autonext.setAttribute("id", "toggle_autonext");
+                
+                let toggle_autonext_label = document.createElement("label");
+                toggle_autonext_label.innerHTML = `<label for="toggle_autonext">Autoclick Next </label>`
+
+                
+                container.appendChild(toggle_autonext_label);
+                container.appendChild(toggle_autonext);
+                document.body.appendChild(container)
+
+                chrome.storage.sync.get('toggle_autonext', function (result) {
+                    toggle_autonext.checked = result.toggle_autonext || false;
+                    chrome.storage.sync.set({
+                        toggle_autonext: result.toggle_autonext || false,
+                    })
+                });
+
+                toggle_autonext.addEventListener("change", function () {
+                    chrome.storage.sync.set({
+                        toggle_autonext: Number(document.getElementById("toggle_autonext").checked),
+                    })
+                });
+
             }
 
             toggle.addEventListener("change", function () {
@@ -90,5 +122,3 @@ function main() {
 
     });
 }
-
-// 1-2 ms

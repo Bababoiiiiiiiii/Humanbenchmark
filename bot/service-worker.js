@@ -1,13 +1,16 @@
 
 const breakpoints = {
     reactiontime: {
-        columnNumber: 61054,
+        columnNumber: 61054
     },
     sequence: {
-        columnNumber: 125677,
+        columnNumber: 125677
     },
     aim: {
         columnNumber: 104694
+    },
+    numbermemory: {
+        columnNumber: 54995
     }
 
 }
@@ -40,6 +43,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                             addAimBot()
                             break
 
+                        case "number-memory":
+                            addNumberMemoryBot()
+                            break
+
                     }
 
                 } else {
@@ -70,13 +77,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 ///////////////////////////
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-    
+
     chrome.storage.sync.get('popupopened', function (result) {
         if (result.popupopened === true && changeInfo.status === "complete" && !tab.url.includes(currentTest)) {// page didnt get refreshed and popup is open                        could probably add some optimization to other stuff as well, but thats some refactoring i dont want to do
             chrome.runtime.sendMessage({
                 type: "urlchanged",
             }, () => {
-                if (chrome.runtime.lastError) {} // no error should be shown as the poup is often closed, thus not available and there is no way to check if its opened
+                if (chrome.runtime.lastError) { } // no error should be shown as the poup is often closed, thus not available and there is no way to check if its opened
             });
         }
     })
@@ -110,6 +117,11 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
                             chrome.debugger.detach({ tabId: tabID })
                             break
 
+                        case "number-memory":
+                            chrome.debugger.onEvent.removeListener(numberMemoryEvent)
+                            chrome.debugger.detach({ tabId: tabID })
+                            break
+
                     }
 
 
@@ -127,6 +139,11 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
                         case "https://humanbenchmark.com/tests/aim":
                             currentTest = "aim"
                             addAimBot()
+                            break
+
+                        case "https://humanbenchmark.com/tests/number-memory":
+                            currentTest = "number-memory"
+                            addNumberMemoryBot()
                             break
 
                         default:
@@ -223,7 +240,7 @@ function reactiontimeEvent(debuggeeId, message, params) {
         chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
             objectId: params.callFrames[0].scopeChain[0].object.objectId, // local scope
         }, (result) => {
-            if (chrome.runtime.lastError) { console.error('Failed to get properties for params.callFrames[0].scopeChain[0].object:', chrome.runtime.lastError) }
+            if (chrome.runtime.lastError) { console.error('Failed to get properties for local scope:', chrome.runtime.lastError) }
 
             chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
                 objectId: result.result[2].value.objectId, // array n
@@ -428,10 +445,71 @@ function aimbotEvent(debuggeeId, message, params) {
 }
 
 function addAimBot() {
-
     attachDebugger(tabID, () => {
         set_breakpoint(tabID, script_id, 0, breakpoints.aim.columnNumber, 'document.querySelector("#root > div > div:nth-child(4) > div.css-12ibl39.e19owgy77 > div > div.desktop-only > span") === null', () => {
             chrome.debugger.onEvent.addListener(aimbotEvent)
+        })
+    })
+}
+
+//////////////////////
+
+function numberMemoryEvent(debuggeeId, message, params) {
+    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+        chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
+            objectId: params.callFrames[0].scopeChain[0].object.objectId, // local scope
+        }, (result) => {
+
+            if (chrome.runtime.lastError) { console.error('Failed to get properties for local scope:', chrome.runtime.lastError) }
+
+            chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
+                objectId: result.result[3].value.objectId, // array c
+            }, (result) => {
+
+                answer = result.result[2].value.value // c.currentAnswer
+
+                // this doesnt work as the submit button checks if the input field was used and stuff... at some point i will find a use for this
+                // chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.evaluateOnCallFrame', {
+                //     callFrameId: params.callFrames[0].callFrameId,
+                //     throwOnSideEffect: false,
+                //     silent: true,
+                //     returnByValue: false,
+                //     expression: `c.userAnswer=${answer}`
+                // })
+
+
+                chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume', () => {
+                    chrome.storage.sync.get('toggle_autonext', function (result) {
+                        
+                        chrome.scripting.executeScript({
+
+                            target: { tabId: tabID, allFrames: true },
+                            args: [answer, result.toggle_autonext],
+                            func: (answer, toggle_autonext) => {
+                                document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.prompt.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > form > div:nth-child(2) > input[type=text]").value = answer
+                                document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.prompt.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > form > div:nth-child(2) > input[type=text]").dispatchEvent(new InputEvent("input", { "bubbles": true })) // make the button do smth
+                                document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.prompt.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > form > div:nth-child(3) > button").click()
+                                
+                                if (toggle_autonext) {
+                                    document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.anim-correct.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > div:nth-child(2) > button").click()
+                                }
+                            }
+                        })
+
+                    });
+                })
+
+
+            })
+        })
+    }
+}
+
+function addNumberMemoryBot() {
+    attachDebugger(tabID, () => {
+        // breakpoint would break on input too if not for the condition
+        set_breakpoint(tabID, script_id, 0, breakpoints.numbermemory.columnNumber, 'document.querySelector("#root > div > div:nth-child(4) > div.number-memory-test.question.e12yaanm0.css-18qa6we.e19owgy77 > div > div > div > div.big-number") !== null', () => {
+            chrome.debugger.onEvent.addListener(numberMemoryEvent)
         })
     })
 }
