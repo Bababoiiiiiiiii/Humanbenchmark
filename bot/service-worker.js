@@ -98,11 +98,12 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
                     
                     let newtest = tab.url.split("tests/", 2)[1]
                     if (newtest !== undefined) {
-                        newtest.split("/", 1)[0].replace("-", "") // basically converts url into test
+                        newtest = newtest.split("/", 1)[0].replace("-", "") // basically converts url into test
                     }
 
                     if (Object.keys(functions).includes(newtest)) {
                         current_test = newtest
+                        console.log("Starting:", newtest)
                         functions[newtest]()
 
                     } else {
