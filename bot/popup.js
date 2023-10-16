@@ -5,7 +5,7 @@
 // USE setBreakpointByUrl
 // properly remove events
 
-const supported_urls = ["https://humanbenchmark.com/tests/reactiontime", "https://humanbenchmark.com/tests/sequence", "https://humanbenchmark.com/tests/aim", "https://humanbenchmark.com/tests/number-memory", "https://humanbenchmark.com/tests/verbal-memory"]
+const supported_urls = ["https://humanbenchmark.com/tests/reactiontime", "https://humanbenchmark.com/tests/sequence", "https://humanbenchmark.com/tests/aim", "https://humanbenchmark.com/tests/number-memory", "https://humanbenchmark.com/tests/verbal-memory", "https://humanbenchmark.com/tests/chimp"]
 let tab_id
 
 
@@ -56,7 +56,37 @@ function main() {
             document.body.appendChild(toggle_label);
             document.body.appendChild(toggle);
 
-            if (test_name == "sequence" || test_name == "aim") {
+            if (test_name == "numbermemory" || test_name == "chimp") {
+                let container = document.createElement("div")
+
+                let toggle_autonext = document.createElement("input");
+                toggle_autonext.setAttribute("type", "checkbox");
+                toggle_autonext.setAttribute("id", "toggle_autonext");
+                
+                let toggle_autonext_label = document.createElement("label");
+                toggle_autonext_label.innerHTML = `<label for="toggle_autonext">Autoclick Next </label>`
+
+                
+                container.appendChild(toggle_autonext_label);
+                container.appendChild(toggle_autonext);
+                document.body.appendChild(container)
+
+                chrome.storage.sync.get(['toggle_autonext'], function (result) {
+                    toggle_autonext.checked = result.toggle_autonext || false;
+                    chrome.storage.sync.set({
+                        toggle_autonext: result.toggle_autonext || false,
+                    })
+                });
+
+                toggle_autonext.addEventListener("change", function () {
+                    chrome.storage.sync.set({
+                        toggle_autonext: Number(document.getElementById("toggle_autonext").checked),
+                    })
+                });
+
+            } 
+            
+            if (test_name == "sequence" || test_name == "aim" || test_name == "chimp") {
 
                 let delay_input = document.createElement("div")
                 delay_input.innerHTML = '<div><label for="delay">Delay (ms)   </label><input type="number" id="delay" name="delay" min="1" max="60000" value="50"></div>'
@@ -76,36 +106,8 @@ function main() {
                         delay: Number(document.getElementById("delay").value),
                     })
                 });
-
-            } else if (test_name == "number-memory") {
-                let container = document.createElement("div")
-
-                let toggle_autonext = document.createElement("input");
-                toggle_autonext.setAttribute("type", "checkbox");
-                toggle_autonext.setAttribute("id", "toggle_autonext");
                 
-                let toggle_autonext_label = document.createElement("label");
-                toggle_autonext_label.innerHTML = `<label for="toggle_autonext">Autoclick Next </label>`
-
-                
-                container.appendChild(toggle_autonext_label);
-                container.appendChild(toggle_autonext);
-                document.body.appendChild(container)
-
-                chrome.storage.sync.get('toggle_autonext', function (result) {
-                    toggle_autonext.checked = result.toggle_autonext || false;
-                    chrome.storage.sync.set({
-                        toggle_autonext: result.toggle_autonext || false,
-                    })
-                });
-
-                toggle_autonext.addEventListener("change", function () {
-                    chrome.storage.sync.set({
-                        toggle_autonext: Number(document.getElementById("toggle_autonext").checked),
-                    })
-                });
-
-            }
+            } 
 
             toggle.addEventListener("change", function () {
                 chrome.storage.sync.set({

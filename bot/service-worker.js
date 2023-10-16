@@ -14,6 +14,10 @@ const breakpoints = {
     },
     verbalmemory: {
         columnNumber: 79111
+    },
+    chimp: {
+        columnNumber1: 83013,
+        columnNumber2: 83558
     }
 
 }
@@ -24,7 +28,8 @@ const functions = {
     sequence: addSequenceBot,
     aim: addAimBot,
     numbermemory: addNumberMemoryBot,
-    verbalmemory: addVerbalMemoryBot
+    verbalmemory: addVerbalMemoryBot,
+    chimp: addChimpBot
 }
 
 const events = {
@@ -32,7 +37,8 @@ const events = {
     sequence: sequenceEvent,
     aim: aimbotEvent,
     numbermemory: numberMemoryEvent,
-    verbalmemory: verbalMemoryEvent
+    verbalmemory: verbalMemoryEvent,
+    chimp: chimpEvent
 }
 
 // using this bc if the toggles user does smth on another humanbenchmark page, the message.tabID  will be for the new one, where the debugger isnt attached and stuff 
@@ -95,7 +101,7 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
                         chrome.debugger.detach({ tabId: tabID })
                     }
 
-                    
+
                     let newtest = tab.url.split("tests/", 2)[1]
                     if (newtest !== undefined) {
                         newtest = newtest.split("/", 1)[0].replace("-", "") // basically converts url into test
@@ -141,10 +147,10 @@ function set_breakpoint(tabID, script_id, lineNumber, columnNumber, condition, c
         } else {
             chrome.storage.sync.get('tries', function (result) {
                 if (result.tries <= 3) {
-                    console.log(`Failed to set breakpoint, trying again by reloading page in 1 second. [${result.tries}/3]`)
                     chrome.storage.sync.set({
                         tries: result.tries + 1,
                     })
+                    console.log(`Failed to set breakpoint, trying again by reloading page in 1 second. [${result.tries}/3]`)
                     setTimeout(() => chrome.tabs.reload(tabID), 1000)
                 } else {
                     chrome.storage.sync.set({
@@ -196,7 +202,7 @@ function attachDebugger(tabId, callback) {
 function reactiontimeEvent(debuggeeId, message, params) {
     let waitTime
 
-    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+    if (tabID == debuggeeId.tabId && message == "Debugger.paused") {
 
         chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
             objectId: params.callFrames[0].scopeChain[0].object.objectId, // local scope
@@ -213,10 +219,10 @@ function reactiontimeEvent(debuggeeId, message, params) {
                 }, (result) => {
                     if (chrome.runtime.lastError) { console.error('Failed to get properties for currentTrial:', chrome.runtime.lastError) }
 
-                    chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume') // RESUME
+                    chrome.debugger.sendCommand({ tabId: tabID }, "Debugger.resume") // RESUME
 
                     waitTime = result.result[0].value.value
-                    
+
                     setTimeout(() => {
                         chrome.scripting.executeScript({
                             target: { tabId: tabID, allFrames: true },
@@ -227,7 +233,7 @@ function reactiontimeEvent(debuggeeId, message, params) {
                                 if (click_me == null) {
                                     const l = setInterval(() => {
                                         click_me = document.querySelector("#root > div > div:nth-child(4) > div.view-go.e18o0sx0.css-saet2v.e19owgy77 > div");
-                                        
+
                                         if (click_me != null) {
                                             clearInterval(l)
                                             click_me.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
@@ -265,7 +271,7 @@ function sequenceEvent(debuggeeId, message, params) {
     let length
     let sequence
 
-    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+    if (tabID == debuggeeId.tabId && message == "Debugger.paused") {
         chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
             objectId: params.callFrames[0].returnValue.objectId, // return value of function rr (returns sequence for the following)
         }, (result) => {
@@ -283,14 +289,14 @@ function sequenceEvent(debuggeeId, message, params) {
                     sequence.push(result.result[i].value.value) // add each square of sequence into own sequence
                 }
 
-                chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume')
+                chrome.debugger.sendCommand({ tabId: tabID }, "Debugger.resume")
 
                 chrome.storage.sync.get("delay", function (delay_result) {
                     chrome.scripting.executeScript({
                         target: { tabId: tabID, allFrames: true },
                         args: [sequence, delay_result.delay],
                         func: (sequence, delay) => {
-                            
+
                             setTimeout(() => {
                                 wait_for_squares = setInterval(() => {
 
@@ -359,7 +365,7 @@ function addSequenceBot() {
 //////////////////////
 
 function aimbotEvent(debuggeeId, message, params) {
-    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+    if (tabID == debuggeeId.tabId && message == "Debugger.paused") {
 
         chrome.storage.sync.get("delay", function (delay_result) {
 
@@ -398,7 +404,7 @@ function aimbotEvent(debuggeeId, message, params) {
 
         });
 
-        chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume')
+        chrome.debugger.sendCommand({ tabId: tabID }, "Debugger.resume")
     }
 
 }
@@ -414,7 +420,7 @@ function addAimBot() {
 //////////////////////
 
 function numberMemoryEvent(debuggeeId, message, params) {
-    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+    if (tabID == debuggeeId.tabId && message == "Debugger.paused") {
         chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
             objectId: params.callFrames[0].scopeChain[0].object.objectId, // local scope
         }, (result) => {
@@ -437,7 +443,7 @@ function numberMemoryEvent(debuggeeId, message, params) {
                 // })
 
 
-                chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume', () => {
+                chrome.debugger.sendCommand({ tabId: tabID }, "Debugger.resume", () => {
                     chrome.storage.sync.get('toggle_autonext', function (result) {
 
                         chrome.scripting.executeScript({
@@ -476,7 +482,7 @@ function addNumberMemoryBot() {
 ////////////////////////////////
 
 function verbalMemoryEvent(debuggeeId, message, params) {
-    if (tabID == debuggeeId.tabId && message == 'Debugger.paused') {
+    if (tabID == debuggeeId.tabId && message == "Debugger.paused") {
         let current_word
 
         chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
@@ -487,13 +493,13 @@ function verbalMemoryEvent(debuggeeId, message, params) {
             chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
                 objectId: result.result[3].value.objectId, // array c
             }, (result) => {
-            
+
                 current_word = result.result[5].value.value
 
                 chrome.debugger.sendCommand({ tabId: tabID }, 'Runtime.getProperties', {
                     objectId: result.result[4].value.objectId, // array words
                 }, (result) => {
-            
+
                     let word_already_seen = false
                     for (let i = 0; i < result.result.length - 51; i++) {
                         if (current_word == result.result[i].value.value) {
@@ -502,7 +508,7 @@ function verbalMemoryEvent(debuggeeId, message, params) {
                         }
                     }
 
-                    chrome.debugger.sendCommand({ tabId: tabID }, 'Debugger.resume')
+                    chrome.debugger.sendCommand({ tabId: tabID }, "Debugger.resume")
 
                     chrome.scripting.executeScript({
 
@@ -533,6 +539,79 @@ function addVerbalMemoryBot() {
     attachDebugger(tabID, () => {
         set_breakpoint(tabID, script_id, 0, breakpoints.verbalmemory.columnNumber, null, () => {
             chrome.debugger.onEvent.addListener(verbalMemoryEvent)
+        })
+    })
+}
+
+/////////////////////////////////////////
+
+function chimpEvent(debuggeeId, message, params) {
+    if (tabID == debuggeeId.tabId && message == "Debugger.paused") {
+        
+        chrome.debugger.sendCommand({ tabId: tabID }, "Debugger.resume", () => {
+            chrome.storage.sync.get(["toggle_autonext", "delay"], function (result) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tabID, allFrames: true },
+                    args: [result.toggle_autonext, result.delay],
+
+                    func: (toggle_autonext, delay) => {
+                        elems = {};
+                        let length = 0;
+
+                        for (elem of document.getElementsByClassName("css-19b5rdt")) {
+                            elems[elem.outerText] = elem;
+                            length++;
+                        }
+
+                        if (delay < 1) {
+                            for (let i = 1; i <= length; i++) {
+                                elems[i].click();
+                            }
+
+                        } else {
+                            let i = 1
+                            let loop = setInterval(() => {
+                                if (i <= length) {
+                                    elems[i].click();
+                                    i++;
+
+                                } else {
+                                    clearInterval(loop);
+                                }
+                            }, delay)
+                        }
+
+                        if (toggle_autonext) {
+                            loop = setInterval(() => {
+                                continue_button = document.querySelector("#root > div > div:nth-child(4) > div.css-12ibl39.e19owgy77 > div > div.desktop-only > div:nth-child(3) > button")
+                                if (continue_button !== null) {
+                                    clearInterval(loop);
+                                    continue_button.click();
+                                }
+                            }, delay * length);
+                        }
+
+
+                    }
+                })
+
+            })
+
+        });
+
+
+
+
+    }
+}
+
+function addChimpBot() {
+    attachDebugger(tabID, () => {
+        set_breakpoint(tabID, script_id, 0, breakpoints.chimp.columnNumber1, null, () => {
+            chrome.debugger.onEvent.addListener(chimpEvent)
+        })
+        set_breakpoint(tabID, script_id, 0, breakpoints.chimp.columnNumber2, null, () => {
+            chrome.debugger.onEvent.addListener(chimpEvent)
         })
     })
 }
