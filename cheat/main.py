@@ -3,6 +3,7 @@ import asyncio
 import json
 import random
 import string
+from sys import float_info
 
 async def generate_credentials(session):
     with open("creds.json", "r") as cf:
@@ -53,5 +54,9 @@ async def main(val):
         await run_tests(session, val)
 
 if __name__ == "__main__":
-    val = int(input("Score to achieve?: "))
+    val = input("Score to achieve?: ")
+    if val == "max":
+        val = float_info.max
+    else:
+        val = int(val)
     asyncio.run(main(val))
